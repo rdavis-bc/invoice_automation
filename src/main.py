@@ -1,5 +1,4 @@
-from typing import Union
-import pandas as pd
+from typing import Optional, Union
 import openpyxl
 import datetime as dt
 import os 
@@ -15,11 +14,12 @@ def create_data_directory(base_dir: Union[str, None] = None) -> str:
     A utility function to quickly create a new directory with the option
     to be placed in a base directory
     Params:
-        :param base_dir: str, a relative path in which you want to place your folder
+        base_dir: str, a relative path in which you want to place your folder
     Returns: the relative path to the created directory
     Raises:
     >>> results = create_data_directory(base_dir='base_dir')
     >>> results
+
     """
     try:
         the_day = dt.datetime.now().strftime('%Y-%m-%d') # getting the current day
@@ -34,19 +34,42 @@ def create_data_directory(base_dir: Union[str, None] = None) -> str:
         print(f'{directory} or {base_dir} already exists Error:{e!r}')
     return directory
 
-def excel_file_to_pdf(filepath:str, sheet: int, loc: str, pdf_name: str):
+# def excel_file_to_pdf(filepath:str, sheet: int, loc: str, pdf_name: str):
 
-    return
+#     return
 
+class UserInput():
+    all_inputs: list = []
+    """
+    Represents the user input
+    >>> UserInput(base_dir=sys.argv[1], dest_dir=sys.argv[2])
+    """
+    def __init__(self, base_dir: Optional[str], dest_dir: Optional[str]) -> None:
+        self.base_dir = base_dir
+        self.dest_dir = dest_dir
+        self.all_inputs.append((self.base_dir, self.dest_dir,))
 
+    def copying_file_to_dest(self) -> None :
+        print(f'copying data to {self.dest_dir}')
+
+class AdditionalUserInput(UserInput):
+    all_inputs: list = []
+    def __init__(self, base_dir: Optional[str], dest_dir: Optional[str]) -> None:
+        super().__init__(base_dir, dest_dir)
+
+    def logging_choices(self) -> None:
+        self.all_inputs.append((self.base_dir, self.dest_dir,))
+        print(f'{self.base_dir!r} and {self.dest_dir!r} logged')
 
 
 if __name__ == "__main__":
     directory = create_data_directory()
+
     # argument should go python main.py <directory of excel sheets> <desired directory for pdfs>
+    anas_input = UserInput(base_dir=sys.argv[1], dest_dir=sys.argv[2])
     directory_of_excel_sheets = sys.argv[1]
     desired_directory_for_pdfs = sys.argv[2]
-
+    exit()
     glob.glob(f"{directory_of_excel_sheets}/*.xlsx")
     the_sheets = glob.glob(f"excel_sheets/*.xlsx")
     # files = itemgetter(*[0])(the_sheets) not needed
