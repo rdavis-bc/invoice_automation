@@ -53,6 +53,7 @@ class UserInput():
         print(f'copying data to {self.dest_dir}')
 
 class AdditionalUserInput(UserInput):
+    """Inherits from UserInput which was used previously"""
     all_inputs: list = []
     def __init__(self, base_dir: Optional[str], dest_dir: Optional[str]) -> None:
         super().__init__(base_dir, dest_dir)
