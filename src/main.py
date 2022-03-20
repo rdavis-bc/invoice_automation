@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Optional, Union
 import openpyxl
 import datetime as dt
 import os 
@@ -19,6 +19,7 @@ def create_data_directory(base_dir: Union[str, None] = None) -> str:
     Raises:
     >>> results = create_data_directory(base_dir='base_dir')
     >>> results
+
     """
     try:
         the_day = dt.datetime.now().strftime('%Y-%m-%d') # getting the current day
@@ -38,17 +39,27 @@ def create_data_directory(base_dir: Union[str, None] = None) -> str:
 #     return
 
 class UserInput():
+    all_inputs: list = []
     """
     Represents the user input
     >>> UserInput(base_dir=sys.argv[1], dest_dir=sys.argv[2])
     """
-    def __init__(self, base_dir: str, dest_dir: str) -> None:
-        base_dir = base_dir
-        dest_dir = dest_dir
+    def __init__(self, base_dir: Optional[str], dest_dir: Optional[str]) -> None:
+        self.base_dir = base_dir
+        self.dest_dir = dest_dir
+        self.all_inputs.append((self.base_dir, self.dest_dir,))
 
     def copying_file_to_dest(self) -> None :
         print(f'copying data to {self.dest_dir}')
 
+class AdditionalUserInput(UserInput):
+    all_inputs: list = []
+    def __init__(self, base_dir: Optional[str], dest_dir: Optional[str]) -> None:
+        super().__init__(base_dir, dest_dir)
+
+    def logging_choices(self) -> None:
+        self.all_inputs.append((self.base_dir, self.dest_dir,))
+        print(f'{self.base_dir!r} and {self.dest_dir!r} logged')
 
 
 if __name__ == "__main__":
