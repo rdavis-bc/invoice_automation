@@ -31,6 +31,7 @@ def create_data_directory(base_dir: Union[str, None] = None) -> str:
             directory = f"{base_dir}/{the_day}"
         path = Path(os.getcwd()) # absolute path to current dir to join with dir name and create new dir
         dir_path = os.path.join(path, directory)
+        
         os.mkdir(dir_path)
     except Exception as e:
         print(f'{directory} or {base_dir} already exists Error:{e!r}')
@@ -82,10 +83,14 @@ class PDFSerializer(SheetSerializer):
 
     def serialize(self) -> str:
         global wkbk
-        xw_wkbk = xw.Book(f"{directory_of_excel_sheets}/{wkbk}")
+        global directory
+        xw_wkbk = xw.Book(f"{wkbk}")
         xw_sheet = xw_wkbk.sheets[self.sheet]
-        pdf_path = f'{self.dest_dir}/{self.client_name + self.month}.pdf'
-        xw_wkbk.to_pdf(path=pdf_path, include=self.sheet)
+        pdf_path = f'{directory}/{self.client_name + self.month}.pdf'
+        try:
+            xw_wkbk.to_pdf(path=pdf_path, include=self.sheet)
+        except Exception as e:
+            print(e)
 
 class WorkbookParser():
     def __init__(self, workbook: openpyxl.Workbook) -> None:
