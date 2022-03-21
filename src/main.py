@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Union
+from typing import Optional, Protocol, Union
 import openpyxl
 import datetime as dt
 import os 
@@ -41,6 +41,10 @@ def create_data_directory(base_dir: Union[str, None] = None) -> str:
 
 #     return
 
+# class Input(Protocol):
+#     base_dir: str
+#     dest_dir: str
+
 class UserInput():
     all_inputs: list = []
     """
@@ -69,24 +73,28 @@ class AdditionalUserInput(UserInput):
 # define sheet serializer classs
 
 class SheetSerializer():
-
-    def __init__(self, sheet, client_name:str, month:str, dest_dir) -> None:
+    ext: str
+    def __init__(self, sheet,/, client_name:str, month:str, dest_dir: str, ext: str) -> None:
         self.sheet = sheet
         self.client_name = client_name
         self.month = month
         self.dest_dir = dest_dir
+        if not self.ext == ext:
+            raise ValueError(f"Wrong file fromat, not a {self.ext}")
 
 class PDFSerializer(SheetSerializer):
+    ext: str = '.pdf'
+    def __init__(self, sheet, client_name: str, month: str, dest_dir: str, ext: str = '.pdf') -> None:
+        super().__init__(sheet, client_name, month, dest_dir, ext=ext)
 
-    def __init__(self, sheet, client_name: str, month: str, dest_dir: str) -> None:
-        super().__init__(sheet, client_name, month, dest_dir)
 
     def serialize(self) -> str:
         global wkbk
         global directory
         xw_wkbk = xw.Book(f"{wkbk}")
         xw_sheet = xw_wkbk.sheets[self.sheet]
-        pdf_path = f'{directory}/{self.client_name + self.month}.pdf'
+        pdf_path = f'{directory}/{self.client_name + self.month}{self.ext}'
+
         try:
             xw_wkbk.to_pdf(path=pdf_path, include=self.sheet)
         except Exception as e:
