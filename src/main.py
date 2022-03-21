@@ -29,6 +29,7 @@ def create_data_directory(base_dir: Union[str, None] = None) -> str:
             directory = f"{base_dir}/{the_day}"
         path = Path(os.getcwd()) # absolute path to current dir to join with dir name and create new dir
         dir_path = os.path.join(path, directory)
+        
         os.mkdir(dir_path)
     except Exception as e:
         print(f'{directory} or {base_dir} already exists Error:{e!r}')
@@ -62,6 +63,61 @@ class AdditionalUserInput(UserInput):
     def logging_choices(self) -> None:
         self.all_inputs.append((self.base_dir, self.dest_dir,))
         print(f'{self.base_dir!r} and {self.dest_dir!r} logged')
+
+# define sheet serializer classs
+
+class SheetSerializer():
+
+    def __init__(self, sheet, client_name:str, month:str, dest_dir) -> None:
+        self.sheet = sheet
+        self.client_name = client_name
+        self.month = month
+        self.dest_dir = dest_dir
+
+class PDFSerializer(SheetSerializer):
+
+    def __init__(self, sheet, client_name: str, month: str, dest_dir: str) -> None:
+        super().__init__(sheet, client_name, month, dest_dir)
+
+    def serialize(self) -> str:
+        global wkbk
+        global directory
+        xw_wkbk = xw.Book(f"{wkbk}")
+        xw_sheet = xw_wkbk.sheets[self.sheet]
+        pdf_path = f'{directory}/{self.client_name + self.month}.pdf'
+        try:
+            xw_wkbk.to_pdf(path=pdf_path, include=self.sheet)
+        except Exception as e:
+            print(e)
+
+class WorkbookParser():
+    def __init__(self, workbook: openpyxl.Workbook) -> None:
+        self.wkbk = workbook
+        self.wkshts : list["Worksheet"] = None
+        # self.clientname: Optional[str] = None
+        # self.month: Optional[str] = None
+        
+    def parser(self) -> None:
+        global anas_input
+        sheets = self.wkbk.sheetnames[1:]
+        for ix, sheet in enumerate(sheets):
+            client = self.wkbk.worksheets[ix]
+            mx_rw, mx_col = client.max_row, client.max_column
+            prev_val = None
+            for row in range(1, mx_rw + 1): # starting with the first row (top)
+                for col in range(mx_col, 0, -1): # starting with the last column
+                    val = client.cell(row=row, column=col).value #value of the coordinates
+                    lw_cs_val = val.lower() if type(val) == str else val # trnasofmring to lower case if datatype is str
+                    if re.match(r'.*date.*', lw_cs_val if type(val) == str else 'negative') and type(prev_val) == dt.datetime :# if date is in the current value and the 
+                        # cell_contents = prev_val.split(' ')                               # is of type datetime      # re.match(r'.*\d{4}
+                        prev_val_month :dt.datetime = prev_val.strftime("%b")
+                        # insert code for creating pdf
+                        pdf_serializer = PDFSerializer(sheet=sheet, client_name=sheet, month=prev_val_month, dest_dir=anas_input.dest_dir)
+                        pdf_serializer.serialize()
+                        prev_val = None
+                        break
+                    prev_val = val
+
 
 
 if __name__ == "__main__":
