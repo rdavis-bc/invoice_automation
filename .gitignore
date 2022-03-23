@@ -2,3 +2,4 @@ xcel_venv/
 *.pdf
 excel_sheets/*
 .DS_Store
+excel_venv2/
