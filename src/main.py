@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Protocol, Union
+from typing import Optional, Protocol, Union, Tuple
 import openpyxl
 import datetime as dt
 import os 
@@ -63,8 +63,8 @@ class AdditionalUserInput(UserInput):
     """Inherits from UserInput which was used previously as a helper"""
 
     all_inputs: list = []
-    def __init__(self, base_dir: Optional[str], dest_dir: Optional[str]) -> None:
-        super().__init__(base_dir, dest_dir)
+    def __init__(self, base_dir_and_dest_dir: Tuple[str, str]) -> None:
+        super().__init__(*base_dir_and_dest_dir)
 
     def logging_choices(self) -> None:
         self.all_inputs.append((self.base_dir, self.dest_dir,))
@@ -80,7 +80,23 @@ class SheetSerializer():
         self.month = month
         self.dest_dir = dest_dir
         if not self.ext == ext:
-            raise ValueError(f"Wrong file fromat, not a {self.ext}")
+            raise ValueError(f"Wrong file format, not a {self.ext}")
+
+class TestSerializer(SheetSerializer):
+    ext: str = '.parquet'
+
+class MissingInputError(ValueError):
+    def __init__(self, base_dir: Optional[str] = '_', dest_dir: Optional[str] = '_') -> None:
+        super().__init__(f'cant convert to PDFs while we\'re missing one of these: base_dir-{base_dir}, dest_dir-{dest_dir}')
+
+# try:
+#     TestSerializer('ronald mar', client_name='ron', month='12', dest_dir='the_end', ext='.pdf')
+# except (ValueError, KeyError) as ex:
+#     print(f'{ex!r} and {ex.args}')
+# else:
+#     print('deleting file')
+# finally:
+#     print(os.getcwd())
 
 class PDFSerializer(SheetSerializer):
     ext: str = '.pdf'
@@ -88,7 +104,7 @@ class PDFSerializer(SheetSerializer):
         super().__init__(sheet, client_name, month, dest_dir, ext=ext)
 
 
-    def serialize(self) -> str:
+    def serialize(self) -> None:
         global wkbk
         global directory
         xw_wkbk = xw.Book(f"{wkbk}")
@@ -99,14 +115,25 @@ class PDFSerializer(SheetSerializer):
             xw_wkbk.to_pdf(path=pdf_path, include=self.sheet)
         except Exception as e:
             print(e)
+        
 
 class WorkbookParser():
     def __init__(self, workbook: openpyxl.Workbook) -> None:
         self.wkbk = workbook
         self.wkshts : list["Worksheet"] = None
+        self._current_iteration: int = 0
         # self.clientname: Optional[str] = None
         # self.month: Optional[str] = None
+    
+    @property
+    def current_iteration(self) -> int:
+        """This property keeps track of the sheets that our self.parser method goes through"""
+        return self._current_iteration
         
+    @current_iteration.setter
+    def current_iteration(self, ix: int) -> None:
+        self._current_iteration += ix
+
     def parser(self) -> None:
         global anas_input
         sheets = self.wkbk.sheetnames[1:]
@@ -125,8 +152,10 @@ class WorkbookParser():
                         pdf_serializer = PDFSerializer(sheet=sheet, client_name=sheet, month=prev_val_month, dest_dir=anas_input.dest_dir)
                         pdf_serializer.serialize()
                         prev_val = None
+                        self.current_iteration = 1
                         break
                     prev_val = val
+                    self.current_iteration = 1
 
 
 
@@ -134,7 +163,15 @@ if __name__ == "__main__":
     
 
     # argument should go python main.py <directory of excel sheets> <desired directory for pdfs>
-    anas_input = UserInput(base_dir=sys.argv[1], dest_dir=sys.argv[2])
+    try :
+        if len(sys.argv) != 3 or (not sys.argv[1] and not sys.argv[2]):
+            raise MissingInputError
+        anas_input = UserInput(base_dir=sys.argv[1], dest_dir=sys.argv[2])
+    except IndexError as ex:
+        print(f'the issue is {ex!r}')
+        # raise ex
+    finally:
+        print(f'fix the following and try again')
     directory = create_data_directory(base_dir=anas_input.dest_dir)
 
     directory_of_excel_sheets = sys.argv[1]
