@@ -10,6 +10,8 @@ Just used for extracting the sheets from a spreadsheet and placing them in their
     * To check if downloaded you can run `python3 --version`
     * If not downloaded then go to the official website [here](https://www.python.org/ftp/python/3.9.10/python-3.9.10-macos11.pkg) and download version **3.9.10**
 2. Git
+    * To check if downloaded you can run `git --version`
+3. Excel (ofc)
 
 ## Set-up
 1. git clone this repo using the command `git clone https://github.com/rdavis-bc/invoice_automation.git`
