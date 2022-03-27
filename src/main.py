@@ -1,4 +1,5 @@
 from __future__ import annotations
+import abc
 from typing import Optional, Protocol, Union, Tuple
 import openpyxl
 import datetime as dt
@@ -66,21 +67,35 @@ class AdditionalUserInput(UserInput):
     def __init__(self, base_dir_and_dest_dir: Tuple[str, str]) -> None:
         super().__init__(*base_dir_and_dest_dir)
 
+    def copying_file_to_dest(self) -> None: 
+        super().copying_file_to_dest()
+        print(f'copying data to {self.dest_dir} in {self.__class__}') 
+
     def logging_choices(self) -> None:
         self.all_inputs.append((self.base_dir, self.dest_dir,))
         print(f'{self.base_dir!r} and {self.dest_dir!r} logged')
 
 # define sheet serializer classs
 
-class SheetSerializer():
-    ext: str
+class SheetSerializer(abc.ABC):
+    
     def __init__(self, sheet,/, client_name:str, month:str, dest_dir: str, ext: str) -> None:
+        self._ext : str
         self.sheet = sheet
         self.client_name = client_name
         self.month = month
         self.dest_dir = dest_dir
         if not self.ext == ext:
             raise ValueError(f"Wrong file format, not a {self.ext}")
+        
+    @abc.abstractmethod
+    def serialize(self) -> None:
+        ... 
+
+    @property
+    @abc.abstractmethod
+    def ext(self) -> str :
+        ...
 
 class TestSerializer(SheetSerializer):
     ext: str = '.parquet'
@@ -99,9 +114,11 @@ class MissingInputError(ValueError):
 #     print(os.getcwd())
 
 class PDFSerializer(SheetSerializer):
-    ext: str = '.pdf'
+    # ext: str = '.pdf'
     def __init__(self, sheet, client_name: str, month: str, dest_dir: str, ext: str = '.pdf') -> None:
+        self._ext = '.pdf'
         super().__init__(sheet, client_name, month, dest_dir, ext=ext)
+        
 
 
     def serialize(self) -> None:
@@ -115,12 +132,15 @@ class PDFSerializer(SheetSerializer):
             xw_wkbk.to_pdf(path=pdf_path, include=self.sheet)
         except Exception as e:
             print(e)
-        
+            
+    @property
+    def ext(self) -> str:
+        return self._ext
 
 class WorkbookParser():
     def __init__(self, workbook: openpyxl.Workbook) -> None:
         self.wkbk = workbook
-        self.wkshts : list["Worksheet"] = None
+        self.wkshts : Optional[list["Worksheet"]] = None
         self._current_iteration: int = 0
         # self.clientname: Optional[str] = None
         # self.month: Optional[str] = None
@@ -140,7 +160,7 @@ class WorkbookParser():
         for ix, sheet in enumerate(sheets):
             client = self.wkbk.worksheets[ix]
             mx_rw, mx_col = client.max_row, client.max_column
-            prev_val = None
+            prev_val: Optional[str] = None
             for row in range(1, mx_rw + 1): # starting with the first row (top)
                 for col in range(mx_col, 0, -1): # starting with the last column
                     val = client.cell(row=row, column=col).value #value of the coordinates
