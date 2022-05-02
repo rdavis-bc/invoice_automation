@@ -22,16 +22,23 @@ from excel_analytics import utils
 def create_data_directory_check(function: Callable[..., Any]) -> Callable[..., Any]:
     # TODO: Check if robust to the passing of multiple positional arguments
     @wraps(function)
-    def wrapped_function(*args):
+    def wrapped_function(*args, **kwargs):
         args_list = list(args)
+        print(args_list)
         directory = f"{args_list[0] + '/' if len(args_list) > 0 and args_list[0] else ''}{dt.datetime.now().strftime('%Y-%m-%d')}"
+        print(directory)
         path = Path(os.getcwd())
+        print(path)
         dir_path = os.path.join(path, directory)
+        print(dir_path)
         
         if not Path(dir_path).is_dir():
-            function(*args)
+            #TODO: figure out why return has to be added here
+            # It seems that the return value has to be brought back up through the stacks
+            return function(*args, **kwargs)
         else:
             print(f'{dir_path} already exists skipping creation')
+            return dir_path
     
     return wrapped_function
 
@@ -60,7 +67,8 @@ def create_data_directory(base_dir: Optional[str] = None) -> str:
         os.makedirs(dir_path)
     except Exception as e:
         print(f'{directory} or {base_dir} already exists Error:{e!r}')
-    return directory
+    print(dir_path)
+    return dir_path
 
 class UserInputFormatter:
     """
@@ -206,7 +214,7 @@ class PDFSerializer(SheetSerializer):
         xw_wkbk = xw.Book(f"{wkbk}")
         xw_sheet = xw_wkbk.sheets[self.sheet]
         pdf_path = f'{directory}/{self.client_name + self.month}{self.ext}'
-
+        print(pdf_path)
         try:
             xw_wkbk.to_pdf(path=pdf_path, include=self.sheet)
         except Exception as e:
@@ -276,6 +284,8 @@ class WorkbookParser():
                         prev_val_month :dt.datetime = prev_val.strftime("%b")
                         # insert code for creating pdf
                         pdf_serializer = PDFSerializer(sheet=sheet, client_name=sheet, month=prev_val_month, dest_dir=anas_input.dest_dir)
+                        sso = SheetSerializerObserver()
+                        pdf_serializer.attach_observer(sso)
                         pdf_serializer.serialize()
                         prev_val = None
                         self.current_iteration = 1
@@ -354,11 +364,13 @@ if __name__ == "__main__":
         # raise ex
     finally:
         print(f'fix the following and try again')
-    directory = create_data_directory(base_dir=anas_input.dest_dir)
+    directory = create_data_directory(anas_input.dest_dir)
+    print(directory)
 
     directory_of_excel_sheets = sys.argv[1]
     desired_directory_for_pdfs = sys.argv[2]
 
+    # directory = desired_directory_for_pdfs + directory
     the_workbooks = glob.glob(f"{directory_of_excel_sheets}/*.xlsx")
     # the_sheets = glob.glob(f"excel_sheets/*.xlsx")
     # files = itemgetter(*[0])(the_sheets) not needed
