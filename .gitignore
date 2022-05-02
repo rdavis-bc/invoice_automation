@@ -3,3 +3,4 @@ xcel_venv/
 excel_sheets/*
 .DS_Store
 excel_venv2/
+*.pyc

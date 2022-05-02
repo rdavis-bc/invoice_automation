@@ -1,18 +1,42 @@
 from __future__ import annotations
 import abc
-from typing import Optional, Protocol, Union, Tuple
+from ast import arg
+from email.policy import default
+from functools import total_ordering, wraps
+from optparse import Option
+from typing import Any, Callable, List, Mapping, Optional, Protocol, Union, Tuple, NamedTuple, cast
+import weakref
 import openpyxl
 import datetime as dt
 import os 
-import sys
 from pathlib import Path
 import re
 import xlwings as xw
 import glob
 from operator import itemgetter 
+from dataclasses import dataclass
+import sys
+from excel_analytics import utils
 
 
-def create_data_directory(base_dir: Union[str, None] = None) -> str:
+def create_data_directory_check(function: Callable[..., Any]) -> Callable[..., Any]:
+    # TODO: Check if robust to the passing of multiple positional arguments
+    @wraps(function)
+    def wrapped_function(*args):
+        args_list = list(args)
+        directory = f"{args_list[0] + '/' if len(args_list) > 0 and args_list[0] else ''}{dt.datetime.now().strftime('%Y-%m-%d')}"
+        path = Path(os.getcwd())
+        dir_path = os.path.join(path, directory)
+        
+        if not Path(dir_path).is_dir():
+            function(*args)
+        else:
+            print(f'{dir_path} already exists skipping creation')
+    
+    return wrapped_function
+
+@create_data_directory_check
+def create_data_directory(base_dir: Optional[str] = None) -> str:
     """
     A utility function to quickly create a new directory with the option
     to be placed in a base directory
@@ -25,26 +49,55 @@ def create_data_directory(base_dir: Union[str, None] = None) -> str:
 
     """
     try:
-        the_day = dt.datetime.now().strftime('%Y-%m-%d') # getting the current day
+        the_day = dt.datetime.now().strftime('%Y-%m-%d')
         if not base_dir: #creating the directory name
             directory = f"{the_day}"
         else:
             directory = f"{base_dir}/{the_day}"
-        path = Path(os.getcwd()) # absolute path to current dir to join with dir name and create new dir
+        path = Path(os.getcwd())
         dir_path = os.path.join(path, directory)
         
-        os.mkdir(dir_path)
+        os.makedirs(dir_path)
     except Exception as e:
         print(f'{directory} or {base_dir} already exists Error:{e!r}')
     return directory
 
-# def excel_file_to_pdf(filepath:str, sheet: int, loc: str, pdf_name: str):
+class UserInputFormatter:
+    """
+    This is to be used as decorator that will format inputted values from the user that are passed
+    to a function as kwargs
+    """
+    def __init__(self, str_format_method: Optional[str]=None) -> None:
+        self.str_format_method = str_format_method
 
-#     return
+    def __call__(self, function: Callable[..., Any]) -> Any:
+        @wraps(function)
+        def wrapped_function(*args, **kwargs)-> Any:
+            
+            if self.str_format_method in ('split', 'lower', 'title', 'upper'):
+                for key in list(kwargs.keys()):
 
-# class Input(Protocol):
-#     base_dir: str
-#     dest_dir: str
+                    str_start_value = kwargs[key]
+                    run_format = "\'" + str_start_value +  "\'"  + f'.{self.str_format_method}()'
+                    str_formatted_value = eval(run_format)
+                    # TODO: use the update function instead
+                    kwargs[key] = str_formatted_value
+                    print(f'Transforming str from {str_start_value} -> {str_start_value} at the following key: {key}')
+                # TODO: allow the args to be updated while skipping the self argument for the method
+                # args = []
+                # for arg in args:
+                #     if arg == eval(self):
+                #         continue
+                #     run_format = "\'" + arg +  "\'"  + f'.{self.str_format_method}()'
+                #     str_formatted_value = eval(run_format)
+                #     arg=str_formatted_value
+                #     args.append(arg)
+                
+            return function(*args, **kwargs)
+        
+        return wrapped_function
+
+
 
 class UserInput():
     all_inputs: list = []
@@ -52,6 +105,7 @@ class UserInput():
     Represents the user input
     >>> UserInput(base_dir=sys.argv[1], dest_dir=sys.argv[2])
     """
+    @UserInputFormatter('lower')
     def __init__(self, base_dir: Optional[str], dest_dir: Optional[str]) -> None:
         self.base_dir = base_dir
         self.dest_dir = dest_dir
@@ -75,7 +129,25 @@ class AdditionalUserInput(UserInput):
         self.all_inputs.append((self.base_dir, self.dest_dir,))
         print(f'{self.base_dir!r} and {self.dest_dir!r} logged')
 
-# define sheet serializer classs
+class Observer(Protocol):
+    def __init__(self) -> None:
+        self._created_at : dt.datetime
+
+    def __call__(self) -> Optional[Any]:
+        ...
+
+class SheetSerializerObserver(Observer):
+    def __init__(self) -> None:
+        self._user = Path(os.getcwd()).owner()
+        self._name = 'Sheet_Serializer_Observer'
+        self._created_at = dt.datetime.now()
+
+    def __call__(self) -> Optional[Any]:
+        ol = ObserverLogging()
+        ol(self)
+        with ol as ol_file:
+            pass
+
 
 class SheetSerializer(abc.ABC):
     
@@ -85,6 +157,7 @@ class SheetSerializer(abc.ABC):
         self.client_name = client_name
         self.month = month
         self.dest_dir = dest_dir
+        self.observers: List[Observer] = []
         if not self.ext == ext:
             raise ValueError(f"Wrong file format, not a {self.ext}")
         
@@ -104,23 +177,29 @@ class MissingInputError(ValueError):
     def __init__(self, base_dir: Optional[str] = '_', dest_dir: Optional[str] = '_') -> None:
         super().__init__(f'cant convert to PDFs while we\'re missing one of these: base_dir-{base_dir}, dest_dir-{dest_dir}')
 
-# try:
-#     TestSerializer('ronald mar', client_name='ron', month='12', dest_dir='the_end', ext='.pdf')
-# except (ValueError, KeyError) as ex:
-#     print(f'{ex!r} and {ex.args}')
-# else:
-#     print('deleting file')
-# finally:
-#     print(os.getcwd())
+
+def SerializationLogger(serializer: Callable[[None],None]):
+    @wraps(serializer)
+    def wrapped_function(*args):
+        write_file = 'logging_file.txt'
+        write_file_path = os.path.join(os.getcwd(), write_file)
+        mode = 'a' if Path(write_file_path).is_file() else 'w'
+            
+        with open('logging_file.txt', mode) as file:
+            file.write('\n') if mode == 'a' else None
+            file.write(f'serialization taking place at {dt.datetime.now()}')
+        cast(PDFSerializer, args[0]).call_observers()
+        serializer(*args)
+        
+    return wrapped_function
 
 class PDFSerializer(SheetSerializer):
-    # ext: str = '.pdf'
+
     def __init__(self, sheet, client_name: str, month: str, dest_dir: str, ext: str = '.pdf') -> None:
         self._ext = '.pdf'
         super().__init__(sheet, client_name, month, dest_dir, ext=ext)
-        
-
-
+    
+    @SerializationLogger
     def serialize(self) -> None:
         global wkbk
         global directory
@@ -132,16 +211,43 @@ class PDFSerializer(SheetSerializer):
             xw_wkbk.to_pdf(path=pdf_path, include=self.sheet)
         except Exception as e:
             print(e)
-            
+    
+    def attach_observer(self, observer:Observer) -> None:
+        self.observers.append(observer)
+
+    def remove_observer(self, observer:Observer) -> None:
+        self.observers.remove(observer)
+
+    def call_observers(self) -> None:
+        [observer() for observer in self.observers]
+
     @property
     def ext(self) -> str:
         return self._ext
 
+class OnlyUpdateDictionary(dict):
+    """
+    Dictionary to be used with the default_arg_dict in WorkbookParser to only allow the values to be updated rather than
+    New ones to be introduced 
+    TODO: See if Kwargs can be allowed ,check whether input is list or a mapping
+    """
+    def update(self, new_mapping: Mapping[str, str]):
+        if set(new_mapping.keys()).issubset(set(self.keys())) != True:
+            raise ValueError
+        super().update(new_mapping)
+        return self
+
 class WorkbookParser():
-    def __init__(self, workbook: openpyxl.Workbook) -> None:
+    default_arg_dict: dict[str, Any] = {
+        'lazy_processing':False ,
+        'internet_access':True
+    }
+    def __init__(self, workbook: openpyxl.Workbook, *sheetinstances: Optional["Worksheet"], **kwargs: str) -> None:
         self.wkbk = workbook
-        self.wkshts : Optional[list["Worksheet"]] = None
+        self.wkshts : Optional[list[weakref.ReferenceType["Worksheet"]]] = [sheet for sheet in sheetinstances] if sheetinstances else None
+        self.wkshts2 = [*sheetinstances] if sheetinstances else None
         self._current_iteration: int = 0
+        self.arg_dict: dict[str, Any] = {**self.default_arg_dict, **kwargs}
         # self.clientname: Optional[str] = None
         # self.month: Optional[str] = None
     
@@ -177,8 +283,64 @@ class WorkbookParser():
                     prev_val = val
                     self.current_iteration = 1
 
+class Input(NamedTuple):
+    staging_dir:str
+    destination_dir: str
 
 
+
+
+@total_ordering
+@dataclass(frozen=True)
+class AlternativeInput:
+    staging_dir:str
+    destination_dir: str
+    current_time: dt.datetime = dt.datetime.now()
+    number: float = - dt.datetime.now().timestamp()
+
+    def __lt__(self, other: AlternativeInput) -> bool:
+        return self.timestamp < other.timestamp
+
+    def __eq__(self, other: AlternativeInput) -> bool:
+        return self.timestamp == other.timestamp
+
+    @property
+    def timestamp(self) -> dt.datetime.timestamp :
+        return cast(dt.datetime, self.current_time).timestamp()
+
+
+def by_number(item: AlternativeInput) -> float :
+    """Used for the Key Parameter in the sort method when looking to sort a list"""
+    return cast(float, item.number)
+
+@dataclass(order=True, frozen=True)
+class AlternativeInputOrdered:
+    staging_dir:str
+    destination_dir: str
+    current_time: dt.datetime = dt.datetime.now()
+
+class RonaldContextManager():
+    def __enter__(self):
+        self.file = open(Path('./main.py'))
+        return self.file
+    def __exit__(self, one, two, three):
+        self.file.close()
+        print(f'file: {self.file} being closed')
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        print(f'{self.__repr__()} being called being as an object')
+        pass
+
+class ObserverLogging(RonaldContextManager):
+    def __enter__(self):
+        mode = 'a' if Path(self._file_path).is_file() else 'w'
+        self.file = open(Path(self._file_path), mode)
+        self.file.write('\n') if mode == 'a' else None
+        self.file.write(f'Serialization done with {self._sso._name} by {self._sso._user} at {dt.datetime.now()}')
+        return self.file
+    # TODO: see if this can be made a class method
+    def __call__(self, observer: SheetSerializerObserver) -> None:
+        self._sso = observer
+        self._file_path = os.path.join(os.getcwd(), f'{observer._user}_{observer._name}_{observer._created_at.date()}')
 if __name__ == "__main__":
     
 
@@ -210,7 +372,13 @@ if __name__ == "__main__":
     exit(0)
     # the sheet name has the client's names
     book.sheetnames
-
+    try:
+        print('hi')
+        raise SystemExit
+    except ValueError as e:
+        print(e)
+    finally:
+        print('caching before exit')
     for a in book.worksheets:
         print(a.title)
 
