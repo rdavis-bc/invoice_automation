@@ -14,7 +14,7 @@ import re
 import xlwings as xw
 import glob
 from operator import itemgetter 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import sys
 from excel_analytics import utils
 
@@ -305,8 +305,8 @@ class Input(NamedTuple):
 class AlternativeInput:
     staging_dir:str
     destination_dir: str
-    current_time: dt.datetime = dt.datetime.now()
-    number: float = - dt.datetime.now().timestamp()
+    current_time: dt.datetime = field(default_factory=lambda: dt.datetime.now()) 
+    number: float = field(default_factory=lambda: - dt.datetime.now().timestamp()) 
 
     def __lt__(self, other: AlternativeInput) -> bool:
         return self.timestamp < other.timestamp
